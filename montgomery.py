@@ -46,14 +46,12 @@ def mod_reverse(a: int, p: int) -> int:
 
 def mont_format(x: list) -> list:
     # x => x*R mod P
-    # todo
-    RR = (join(R) % join(P)) * (join(R) % join(P))
-    print("RR is", hex(RR))
-    return expand(mont_mul_mod(x, expand(RR)))
+    RR = join(R) * join(R) % join(P)    # R是常量，R^2 mod P 可提前计算
+    return mont_mul_mod(x, expand(RR))
     # return expand(join(x) * join(R) % join(P))
 
 
-def mont_mul_mod(x: list, y: list) -> int:
+def mont_mul_mod(x: list, y: list) -> list:
     # x * y * R^-1 mod P
     # x的长度应和R保持一致，y可以不定长
     D = 0
@@ -75,7 +73,7 @@ def mont_mul_mod(x: list, y: list) -> int:
         D0 = expand(D)[0]
     if D >= join(P):
         D -= join(P)
-    return D
+    return expand(D)
 
 
 def reduce2(T: int) -> int:
@@ -84,16 +82,19 @@ def reduce2(T: int) -> int:
     return T * R_1 % join(P)
 
 
-def mont_reduce(T: int):
+def mont_reduce(T: list) -> list:
+    t = join(T)
     R_1 = mod_reverse(join(R), join(P))
     P_ = (join(R) * R_1 - 1) // join(P)     # P' 可预先计算好
     print("P' is", hex(P_))
     m = (len(R) - 1) * int(log2(r))  # 256
 
-    q = ((T & (join(R)-1)) * P_) & (join(R)-1)    # q = (T%R)*P_ % R
-    a = (T + q * join(P)) >> m                    # a = (T+q*P) // R
+    q = ((t & (join(R)-1)) * P_) & (join(R)-1)    # q = (T%R)*P_ % R
+    a = (t + q * join(P)) >> m                    # a = (T+q*P) // R
     print(f"a is {hex(a)}, P is {hex(join(P))}")
-    return a - join(P) if a > join(P) else a
+    if a > join(P):
+        a -= join(P)
+    return expand(a)
 
 
 r = 2**64  # uint64
@@ -106,22 +107,17 @@ A = expand(0x5abfcc164e7baae2ef0c3e3f77b3e0d48d76f90f2d3bd2e206b6bbde7340966f)
 # 得到 R * R^-1 = 1 mod P 和 P * P' = -1 mod R
 # 所以，R^-1 称为R的模P逆，P'称为P的模R负逆
 
+def field_mul(a: list, b: list):
+    AR = mont_format(a)
+    BR = mont_format(b)
+    ABR = mont_mul_mod(AR, BR)
+    AB = mont_reduce(ABR)
+    return AB
+
 
 if __name__ == '__main__':
-    print(f"A {hex(join(A))}")
+    A2 = field_mul(A, A)
+    A4 = field_mul(A2, A2)
+    A5 = field_mul(A, A4)
+    print("A^5 mod P is", hex(join(A5)))
 
-    AR = mont_format(A)
-    print(f"AR {hex(join(AR))}")
-
-    ARR = [0, 0, 0, 0, 0, 0, 0, 0] + A  # A * 2^512 相当于左移 512/64=8个单位
-
-    AR2 = expand(reduce2(join(ARR)))
-    print(f"AR2 {hex(join(AR2))}")
-
-    # AR3 = mont_reduce(join(ARR))
-    # print(f"AR3 {hex(AR3)}")
-
-    AAR = mont_mul_mod(AR2, AR2)
-    print(f"AAR {hex(AAR)}")
-    result = mont_reduce(AAR)
-    print("A^2 mod P is", hex(result))
